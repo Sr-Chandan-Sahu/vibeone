@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { Home, Headphones, MessageCircle, Monitor, LogOut, UserPlus, Copy } from "lucide-react";
+import { Home, Headphones, MessageCircle, Monitor, LogOut, User as UserIcon, Copy, Check } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { ChatPanel } from "@/components/ChatPanel";
 import { MusicPlayer } from "@/components/MusicPlayer";
-import { apiRequest } from "@/lib/queryClient";
-import type { Room, RoomMember } from "@shared/schema";
-import type { User } from "@/utils/types";
+import { subscribeToParticipants, addParticipant, removeParticipant } from "@/services/storageService";
+import type { User} from "@/utils/types";
 
 const avatarColors = [
   "bg-amber-600",
@@ -19,17 +17,14 @@ const avatarColors = [
   "bg-orange-600",
 ];
 
-interface RoomData {
-  room: Room;
-  members: RoomMember[];
-}
-
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"home" | "audio" | "chat" | "screen">("home");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [participants, setParticipants] = useState<User[]>([]);
+  const [copied, setCopied] = useState(false);
 
   // Initialize user on component mount
   useEffect(() => {
@@ -46,17 +41,30 @@ export default function RoomPage() {
     }
   }, [navigate]);
 
-  const { data, isLoading, error } = useQuery<RoomData>({
-    queryKey: ["/api/rooms", params.code],
-    queryFn: async () => {
-      const response = await apiRequest("GET", `/api/rooms/${params.code}`);
-      return response.json();
-    },
-  });
+  // Handle real-time participants
+  useEffect(() => {
+    if (!currentUser || !params.code) return;
+
+    // Add self to participants
+    addParticipant(params.code, currentUser);
+
+    const unsubscribe = subscribeToParticipants(params.code, (users) => {
+      setParticipants(users);
+    });
+
+    return () => {
+      if (currentUser?.id) {
+        removeParticipant(params.code!, currentUser.id);
+      }
+      unsubscribe();
+    };
+  }, [currentUser, params.code]);
 
   const copyRoomCode = () => {
-    if (data?.room?.code) {
-      navigator.clipboard.writeText(data.room.code);
+    if (params.code) {
+      navigator.clipboard.writeText(params.code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
       toast({
         title: "Copied!",
         description: "Room code copied to clipboard",
@@ -68,27 +76,11 @@ export default function RoomPage() {
     navigate("/");
   };
 
-  if (isLoading) {
+  // Show loading while user is being initialized
+  if (!currentUser || !params.code) {
     return (
       <div className="min-h-screen vibeone-gradient flex items-center justify-center">
         <div className="text-white/60 text-lg">Loading room...</div>
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="min-h-screen vibeone-gradient flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-white/60 text-lg mb-4">Room not found</p>
-          <button
-            onClick={() => navigate("/")}
-            className="bg-primary text-white rounded-full px-6 py-2 text-sm"
-            data-testid="button-go-home"
-          >
-            Go Home
-          </button>
-        </div>
       </div>
     );
   }
@@ -97,7 +89,7 @@ export default function RoomPage() {
     <div className="min-h-screen vibeone-gradient relative overflow-hidden flex">
       {/* Light beam effect */}
       <div className="light-beam" />
-      
+
       {/* Dot pattern overlay */}
       <div className="absolute inset-0 dot-pattern opacity-20 pointer-events-none" />
 
@@ -108,7 +100,7 @@ export default function RoomPage() {
           className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-5 py-2.5 text-white/90 text-sm font-medium transition-all duration-300 hover:bg-white/15"
         >
           About us
-          <UserPlus className="w-4 h-4" />
+          <UserIcon className="w-4 h-4" />
         </button>
       </div>
 
@@ -125,7 +117,11 @@ export default function RoomPage() {
       {activeTab === "audio" && currentUser && (
         <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:static lg:w-96 lg:bg-transparent lg:backdrop-blur-none">
           <div className="absolute right-0 top-0 h-full w-full lg:relative lg:w-96">
-            <MusicPlayer roomId={params.code || ''} onClose={() => setActiveTab('home')} />
+            <MusicPlayer 
+              roomId={params.code || ''} 
+              user={currentUser}
+              onClose={() => setActiveTab('home')} 
+            />
           </div>
         </div>
       )}
@@ -163,14 +159,14 @@ export default function RoomPage() {
                 className="text-xl font-bold text-white tracking-wider"
                 data-testid="text-room-code"
               >
-                {data.room.code}
+                {params.code}
               </h2>
               <button
                 onClick={copyRoomCode}
                 data-testid="button-copy-code"
                 className="text-white/50 hover:text-white transition-colors"
               >
-                <Copy className="w-4 h-4" />
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               </button>
             </div>
             <p className="text-white/40 text-xs mt-1">Instant, private conversations.</p>
@@ -180,7 +176,7 @@ export default function RoomPage() {
             data-testid="button-invite"
             className="p-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl transition-all hover:bg-white/15"
           >
-            <UserPlus className="w-5 h-5 text-white/70" />
+            <UserIcon className="w-5 h-5 text-white/70" />
           </button>
         </div>
 
@@ -211,7 +207,7 @@ export default function RoomPage() {
             ROOM MEMBERS
           </h3>
           <div className="flex flex-wrap gap-3">
-            {data.members.map((member, index) => (
+            {participants.map((member, index) => (
               <div
                 key={member.id}
                 className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full pl-3 pr-4 py-2"
@@ -250,44 +246,40 @@ export default function RoomPage() {
           <button
             onClick={() => setActiveTab("home")}
             data-testid="nav-home"
-            className={`p-3 rounded-full transition-all ${
-              activeTab === "home"
-                ? "bg-white text-gray-900"
-                : "text-white/70 hover:bg-white/10"
-            }`}
+            className={`p-3 rounded-full transition-all ${activeTab === "home"
+              ? "bg-white text-gray-900"
+              : "text-white/70 hover:bg-white/10"
+              }`}
           >
             <Home className="w-5 h-5" />
           </button>
           <button
             onClick={() => setActiveTab("audio")}
             data-testid="nav-audio"
-            className={`p-3 rounded-full transition-all ${
-              activeTab === "audio"
-                ? "bg-white text-gray-900"
-                : "text-white/70 hover:bg-white/10"
-            }`}
+            className={`p-3 rounded-full transition-all ${activeTab === "audio"
+              ? "bg-white text-gray-900"
+              : "text-white/70 hover:bg-white/10"
+              }`}
           >
             <Headphones className="w-5 h-5" />
           </button>
           <button
             onClick={() => setActiveTab("chat")}
             data-testid="nav-chat"
-            className={`p-3 rounded-full transition-all ${
-              activeTab === "chat"
-                ? "bg-white text-gray-900"
-                : "text-white/70 hover:bg-white/10"
-            }`}
+            className={`p-3 rounded-full transition-all ${activeTab === "chat"
+              ? "bg-white text-gray-900"
+              : "text-white/70 hover:bg-white/10"
+              }`}
           >
             <MessageCircle className="w-5 h-5" />
           </button>
           <button
             onClick={() => setActiveTab("screen")}
             data-testid="nav-screen"
-            className={`p-3 rounded-full transition-all ${
-              activeTab === "screen"
-                ? "bg-white text-gray-900"
-                : "text-white/70 hover:bg-white/10"
-            }`}
+            className={`p-3 rounded-full transition-all ${activeTab === "screen"
+              ? "bg-white text-gray-900"
+              : "text-white/70 hover:bg-white/10"
+              }`}
           >
             <Monitor className="w-5 h-5" />
           </button>

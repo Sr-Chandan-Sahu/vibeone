@@ -1,23 +1,243 @@
-import { useState } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Volume2, Search } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, Pause, SkipForward, SkipBack, Volume2, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { searchYoutubeVideos } from '@/services/youtubeService';
-import type { MusicTrack } from '@/utils/types';
+import { subscribeToMusicState, updateMusicState } from '@/services/storageService';
+import type { MusicTrack, MusicState, User } from '@/utils/types';
 
 interface MusicPlayerProps {
   roomId?: string;
+  user?: User;
   onClose?: () => void;
 }
 
-export function MusicPlayer({ onClose }: MusicPlayerProps) {
-  const [currentTrack, setCurrentTrack] = useState<MusicTrack | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [queue, setQueue] = useState<MusicTrack[]>([]);
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: () => void;
+  }
+}
+
+export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
+  const [state, setState] = useState<MusicState>({
+    currentTrack: null,
+    isPlaying: false,
+    queue: [],
+    startedAt: 0,
+    pausedAt: 0
+  });
+
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<MusicTrack[]>([]);
+  const [volume, setVolume] = useState(100);
+
+  const playerRef = useRef<any>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+
+  // Check if current user is host
+  const isHost = user?.isHost ?? false;
+
+  // Define handleNext with useCallback so it can be referenced in event handlers
+  const handleNext = useCallback(async () => {
+    if (!roomId || !isHost) return;
+
+    try {
+      if (state.queue.length === 0) {
+        // No more tracks
+        await updateMusicState(roomId, {
+          currentTrack: null,
+          isPlaying: false,
+          queue: []
+        });
+        return;
+      }
+
+      const nextTrack = state.queue[0];
+      const remainingQueue = state.queue.slice(1);
+
+      await updateMusicState(roomId, {
+        currentTrack: nextTrack,
+        isPlaying: true,
+        startedAt: Date.now(),
+        queue: remainingQueue
+      });
+    } catch (error) {
+      console.error('Error skipping to next track:', error);
+    }
+  }, [roomId, isHost, state.queue]);
+
+  const handlePlayPause = useCallback(async () => {
+    if (!roomId || !isHost || !state.currentTrack) return;
+
+    try {
+      const newIsPlaying = !state.isPlaying;
+
+      await updateMusicState(roomId, {
+        isPlaying: newIsPlaying,
+        startedAt: newIsPlaying ? Date.now() : state.startedAt,
+        pausedAt: !newIsPlaying ? playerRef.current?.getCurrentTime?.() ?? 0 : state.pausedAt
+      });
+    } catch (error) {
+      console.error('Error toggling play/pause:', error);
+    }
+  }, [roomId, isHost, state.isPlaying, state.currentTrack, state.startedAt, state.pausedAt]);
+
+  const handlePrev = useCallback(async () => {
+    if (!roomId || !isHost) return;
+
+    try {
+      const currentIndex = state.queue.findIndex(t => t.id === state.currentTrack?.id);
+      if (currentIndex > 0) {
+        const prevTrack = state.queue[currentIndex - 1];
+        await updateMusicState(roomId, {
+          currentTrack: prevTrack,
+          isPlaying: true,
+          startedAt: Date.now()
+        });
+      }
+    } catch (error) {
+      console.error('Error skipping to previous track:', error);
+    }
+  }, [roomId, isHost, state.queue, state.currentTrack]);
+
+  // Initialize State from Firebase
+  useEffect(() => {
+    if (!roomId) return;
+
+    try {
+      const unsubscribe = subscribeToMusicState(roomId, (musicState) => {
+        setState(musicState);
+        syncPlayer(musicState);
+      });
+
+      return () => {
+        unsubscribe();
+      };
+    } catch (error) {
+      console.error('Error subscribing to music state:', error);
+    }
+  }, [roomId]);
+
+  // Initialize YouTube Player
+  useEffect(() => {
+    const initPlayer = () => {
+      if (!playerContainerRef.current) {
+        console.error('Player container ref not available');
+        return;
+      }
+
+      if (!window.YT || !window.YT.Player) {
+        console.error('YouTube IFrame API not loaded');
+        return;
+      }
+
+      // Prevent re-initialization if already exists
+      if (playerRef.current) {
+        console.log('Player already initialized');
+        return;
+      }
+
+      try {
+        console.log('Initializing YouTube player...');
+        playerRef.current = new window.YT.Player(playerContainerRef.current, {
+          height: '100%',
+          width: '100%',
+          playerVars: {
+            'autoplay': 1,
+            'controls': 0,
+            'disablekb': 1,
+            'playsinline': 1,
+            'origin': window.location.origin
+          },
+          events: {
+            'onReady': () => {
+              console.log('YouTube player ready');
+              syncPlayer(stateRef.current);
+              // Set initial volume
+              if (playerRef.current && typeof playerRef.current.setVolume === 'function') {
+                playerRef.current.setVolume(volume);
+              }
+            },
+            'onStateChange': (event: any) => {
+              console.log('Player state changed:', event.data);
+              // Auto-next when video ends (state === 0)
+              if (event.data === 0 && isHost) {
+                handleNext();
+              }
+            },
+            'onError': (e: any) => {
+              console.error("YouTube Player Error:", e);
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error initializing YouTube player:', error);
+      }
+    };
+
+    if (window.YT && window.YT.Player) {
+      initPlayer();
+    } else {
+      console.log('YouTube API not ready yet, waiting...');
+      const interval = setInterval(() => {
+        if (window.YT && window.YT.Player) {
+          clearInterval(interval);
+          initPlayer();
+        }
+      }, 500);
+      return () => clearInterval(interval);
+    }
+  }, [roomId, volume, isHost, handleNext]);
+
+  // Sync Logic: Make the actual IFrame match the State
+  const syncPlayer = (targetState: MusicState) => {
+    if (!playerRef.current || typeof playerRef.current.loadVideoById !== 'function') return;
+
+    const player = playerRef.current;
+
+    // Check if track changed
+    const currentUrl = player.getVideoUrl ? player.getVideoUrl() : '';
+    const targetId = targetState.currentTrack?.id;
+
+    if (targetId) {
+      if (!currentUrl || !currentUrl.includes(targetId)) {
+        player.loadVideoById({
+          videoId: targetId,
+          startSeconds: targetState.isPlaying ? (Date.now() - targetState.startedAt) / 1000 : targetState.pausedAt
+        });
+      }
+    }
+
+    // Sync Playback Status
+    const playerState = player.getPlayerState ? player.getPlayerState() : -1;
+
+    if (targetState.isPlaying) {
+      const now = Date.now();
+      const seekTo = (now - targetState.startedAt) / 1000;
+
+      const currentParams = player.getCurrentTime ? player.getCurrentTime() : 0;
+      if (Math.abs(currentParams - seekTo) > 2) {
+        player.seekTo(seekTo, true);
+      }
+
+      if (playerState !== 1) {
+        player.playVideo();
+      }
+    } else {
+      if (playerState !== 2 && playerState !== 5) {
+        player.pauseVideo();
+      }
+    }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,37 +254,48 @@ export function MusicPlayer({ onClose }: MusicPlayerProps) {
     }
   };
 
-  const addToQueue = (track: MusicTrack) => {
-    setQueue([...queue, track]);
-    if (!currentTrack) {
-      setCurrentTrack(track);
+  const addToQueue = async (track: MusicTrack) => {
+    if (!roomId) return;
+
+    try {
+      const newTrack = { ...track, addedBy: user?.name || 'Unknown' };
+
+      if (!state.currentTrack) {
+        await updateMusicState(roomId, {
+          currentTrack: newTrack,
+          isPlaying: true,
+          startedAt: Date.now(),
+          queue: state.queue
+        });
+      } else {
+        const newQueue = [...state.queue, newTrack];
+        await updateMusicState(roomId, { queue: newQueue });
+      }
+
+      setSearchResults([]);
+      setSearchQuery('');
+    } catch (error) {
+      console.error('Error adding to queue:', error);
     }
   };
 
-  const playTrack = (track: MusicTrack) => {
-    setCurrentTrack(track);
-    setIsPlaying(true);
-  };
+  const removeFromQueue = async (index: number) => {
+    if (!roomId || !isHost) return;
 
-  const togglePlayPause = () => {
-    setIsPlaying(!isPlaying);
-  };
-
-  const skipNext = () => {
-    if (queue.length > 0) {
-      const currentIndex = queue.findIndex(t => t.id === currentTrack?.id);
-      if (currentIndex < queue.length - 1) {
-        setCurrentTrack(queue[currentIndex + 1]);
-      }
+    try {
+      const newQueue = [...state.queue];
+      newQueue.splice(index, 1);
+      await updateMusicState(roomId, { queue: newQueue });
+    } catch (error) {
+      console.error('Error removing from queue:', error);
     }
   };
 
-  const skipPrev = () => {
-    if (queue.length > 0) {
-      const currentIndex = queue.findIndex(t => t.id === currentTrack?.id);
-      if (currentIndex > 0) {
-        setCurrentTrack(queue[currentIndex - 1]);
-      }
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseInt(e.target.value, 10);
+    setVolume(newVolume);
+    if (playerRef.current && typeof playerRef.current.setVolume === 'function') {
+      playerRef.current.setVolume(newVolume);
     }
   };
 
@@ -72,7 +303,7 @@ export function MusicPlayer({ onClose }: MusicPlayerProps) {
     <div className="flex flex-col h-full bg-background">
       {/* Music Player Header */}
       <div className="border-b p-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Music</h2>
+        <h2 className="text-lg font-semibold">Music {isHost && '(Host)'}</h2>
         {onClose && (
           <button
             onClick={onClose}
@@ -85,48 +316,65 @@ export function MusicPlayer({ onClose }: MusicPlayerProps) {
 
       {/* Now Playing */}
       <div className="p-4 border-b space-y-3">
-        {currentTrack ? (
+        {state.currentTrack ? (
           <>
             <div className="text-center">
               <h3 className="text-sm font-semibold line-clamp-2">
-                {currentTrack.title}
+                {state.currentTrack.title}
               </h3>
               <p className="text-xs text-muted-foreground mt-1">
-                {currentTrack.addedBy}
+                Added by {state.currentTrack.addedBy}
               </p>
             </div>
 
             {/* Player Controls */}
             <div className="flex items-center justify-center gap-2">
-              <Button size="icon" variant="ghost" onClick={skipPrev}>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                onClick={handlePrev}
+                disabled={!isHost}
+              >
                 <SkipBack className="w-4 h-4" />
               </Button>
-              <Button size="icon" onClick={togglePlayPause}>
-                {isPlaying ? (
+              <Button 
+                size="icon" 
+                onClick={handlePlayPause}
+                disabled={!isHost}
+              >
+                {state.isPlaying ? (
                   <Pause className="w-4 h-4" />
                 ) : (
                   <Play className="w-4 h-4" />
                 )}
               </Button>
-              <Button size="icon" variant="ghost" onClick={skipNext}>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                onClick={handleNext}
+                disabled={!isHost}
+              >
                 <SkipForward className="w-4 h-4" />
               </Button>
-              <Button size="icon" variant="ghost">
-                <Volume2 className="w-4 h-4" />
-              </Button>
+            </div>
+
+            {/* Volume Control */}
+            <div className="flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-muted-foreground" />
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={handleVolumeChange}
+                className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-xs text-muted-foreground w-8">{volume}%</span>
             </div>
 
             {/* YouTube Embed */}
             <div className="aspect-video rounded-lg overflow-hidden bg-black/20">
-              <iframe
-                width="100%"
-                height="100%"
-                src={`https://www.youtube.com/embed/${currentTrack.id}?autoplay=${isPlaying ? 1 : 0}`}
-                title={currentTrack.title}
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
+              <div ref={playerContainerRef} className="w-full h-full" />
             </div>
           </>
         ) : (
@@ -172,24 +420,30 @@ export function MusicPlayer({ onClose }: MusicPlayerProps) {
           ) : (
             <>
               <h3 className="text-xs font-semibold text-muted-foreground mb-2">
-                QUEUE
+                QUEUE ({state.queue.length})
               </h3>
-              {queue.length === 0 ? (
+              {state.queue.length === 0 ? (
                 <div className="text-center text-muted-foreground text-xs py-8">
-                  Queue is empty
+                  Queue is empty. Search and add songs!
                 </div>
               ) : (
-                queue.map((track, index) => (
+                state.queue.map((track, index) => (
                   <div
                     key={`${track.id}-${index}`}
-                    className={`p-2 rounded-lg cursor-pointer transition-colors text-sm line-clamp-1 ${
-                      track.id === currentTrack?.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-secondary'
-                    }`}
-                    onClick={() => playTrack(track)}
+                    className="p-2 rounded-lg hover:bg-secondary transition-colors text-sm line-clamp-1 flex items-center justify-between group"
                   >
-                    {index + 1}. {track.title}
+                    <span className="flex-1">
+                      {index + 1}. {track.title}
+                    </span>
+                    {isHost && (
+                      <button
+                        onClick={() => removeFromQueue(index)}
+                        className="opacity-0 group-hover:opacity-100 p-1 transition-opacity"
+                        title="Remove from queue"
+                      >
+                        <Trash2 className="w-3 h-3 text-destructive" />
+                      </button>
+                    )}
                   </div>
                 ))
               )}

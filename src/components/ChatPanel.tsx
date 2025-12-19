@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Sparkles } from 'lucide-react';
-import { saveMessage, subscribeToMessages, addParticipant, removeParticipant, subscribeToParticipants } from '@/services/chatService';
+import { saveMessage, subscribeToMessages, addParticipant, removeParticipant, subscribeToParticipants } from '@/services/storageService';
 import { GEMINI_BOT_USER, generateId } from '@/constants';
 import { generateAiResponseStream } from '@/services/geminiService';
 

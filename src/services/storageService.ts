@@ -8,9 +8,9 @@ import {
   arrayUnion,
   query,
   orderBy,
-  getDoc
+  runTransaction
 } from 'firebase/firestore';
-import type { Message, MusicState, User } from '../..//types';
+import type { Message, MusicState, User } from '../utils/types';
 
 const ROOMS_COLLECTION = 'rooms';
 
@@ -84,14 +84,24 @@ export const addParticipant = async (roomId: string, user: User) => {
 
 export const removeParticipant = async (roomId: string, userId: string) => {
   const roomRef = doc(db, ROOMS_COLLECTION, roomId);
-  const snap = await getDoc(roomRef);
-  if (snap.exists()) {
-    const data = snap.data();
-    const participants = data.participants as User[] || [];
-    const updated = participants.filter(p => p.id !== userId);
-    if (participants.length !== updated.length) {
-      await updateDoc(roomRef, { participants: updated });
-    }
+  try {
+    await runTransaction(db, async (transaction) => {
+      const sfDoc = await transaction.get(roomRef);
+      if (!sfDoc.exists()) {
+        return;
+      }
+
+      const data = sfDoc.data();
+      const participants = data.participants as User[] || [];
+      const updated = participants.filter(p => p.id !== userId);
+
+      // Only update if changes occurred
+      if (participants.length !== updated.length) {
+        transaction.update(roomRef, { participants: updated });
+      }
+    });
+  } catch (e) {
+    console.error("Remove participant transaction failed: ", e);
   }
 };
 

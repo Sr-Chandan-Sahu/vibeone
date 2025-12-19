@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Users } from "lucide-react";
+import { User, Users, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createRoomSchema, joinRoomSchema, type CreateRoomInput, type JoinRoomInput } from "@shared/schema";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { createRoomId } from "@/services/storageService";
 
 export default function CreateRoom() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"new" | "join">("new");
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
 
   const createForm = useForm<CreateRoomInput>({
     resolver: zodResolver(createRoomSchema),
@@ -23,62 +23,69 @@ export default function CreateRoom() {
     defaultValues: { name: "", roomCode: "" },
   });
 
-  const createRoomMutation = useMutation({
-    mutationFn: async (data: CreateRoomInput) => {
-      const response = await apiRequest("POST", "/api/rooms", data);
-      return response.json();
-    },
-    onSuccess: (data) => {
+  const onCreateSubmit = async (data: CreateRoomInput) => {
+    setIsLoading(true);
+    try {
+      // Generate room code
+      const roomCode = createRoomId();
+
       // Save user data to localStorage for persistence
       const user = {
-        id: data.user?.id || Math.random().toString(36).substr(2, 9),
-        name: data.user?.name || '',
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user?.name || 'user'}`,
+        id: Math.random().toString(36).substr(2, 9),
+        name: data.name,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.name}`,
         isHost: true
       };
       localStorage.setItem('vibe_user', JSON.stringify(user));
-      navigate(`/room/${data.room.code}`);
-    },
-    onError: () => {
+
+      // Navigate to room - Firebase will handle room creation on first access
+      navigate(`/room/${roomCode}`);
+
+      toast({
+        title: "Room Created!",
+        description: `Room code: ${roomCode}`,
+      });
+    } catch (error) {
+      console.error('Error creating room:', error);
       toast({
         title: "Error",
         description: "Failed to create room. Please try again.",
         variant: "destructive",
       });
-    },
-  });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const joinRoomMutation = useMutation({
-    mutationFn: async (data: JoinRoomInput) => {
-      const response = await apiRequest("POST", "/api/rooms/join", data);
-      return response.json();
-    },
-    onSuccess: (data) => {
+  const onJoinSubmit = async (data: JoinRoomInput) => {
+    setIsLoading(true);
+    try {
       // Save user data to localStorage for persistence
       const user = {
-        id: data.user?.id || Math.random().toString(36).substr(2, 9),
-        name: data.user?.name || '',
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.user?.name || 'user'}`,
+        id: Math.random().toString(36).substr(2, 9),
+        name: data.name,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.name}`,
         isHost: false
       };
       localStorage.setItem('vibe_user', JSON.stringify(user));
-      navigate(`/room/${data.room.code}`);
-    },
-    onError: () => {
+
+      // Navigate to room
+      navigate(`/room/${data.roomCode}`);
+
+      toast({
+        title: "Joined!",
+        description: `Welcome to room ${data.roomCode}`,
+      });
+    } catch (error) {
+      console.error('Error joining room:', error);
       toast({
         title: "Error",
         description: "Room not found or invalid code.",
         variant: "destructive",
       });
-    },
-  });
-
-  const onCreateSubmit = (data: CreateRoomInput) => {
-    createRoomMutation.mutate(data);
-  };
-
-  const onJoinSubmit = (data: JoinRoomInput) => {
-    joinRoomMutation.mutate(data);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -158,11 +165,12 @@ export default function CreateRoom() {
               <div className="flex justify-center pt-2">
                 <button
                   type="submit"
-                  disabled={createRoomMutation.isPending}
+                  disabled={isLoading}
                   data-testid="button-create-room"
-                  className="bg-primary hover:bg-primary/90 text-white rounded-full px-10 py-3 font-medium transition-all duration-300 disabled:opacity-50"
+                  className="bg-primary hover:bg-primary/90 text-white rounded-full px-10 py-3 font-medium transition-all duration-300 disabled:opacity-50 flex items-center gap-2"
                 >
-                  {createRoomMutation.isPending ? "Creating..." : "Create"}
+                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isLoading ? "Creating..." : "Create"}
                 </button>
               </div>
             </form>
@@ -198,11 +206,12 @@ export default function CreateRoom() {
               <div className="flex justify-center pt-2">
                 <button
                   type="submit"
-                  disabled={joinRoomMutation.isPending}
+                  disabled={isLoading}
                   data-testid="button-join-room"
-                  className="bg-primary hover:bg-primary/90 text-white rounded-full px-10 py-3 font-medium transition-all duration-300 disabled:opacity-50"
+                  className="bg-primary hover:bg-primary/90 text-white rounded-full px-10 py-3 font-medium transition-all duration-300 disabled:opacity-50 flex items-center gap-2"
                 >
-                  {joinRoomMutation.isPending ? "Joining..." : "Join"}
+                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isLoading ? "Joining..." : "Join"}
                 </button>
               </div>
             </form>
