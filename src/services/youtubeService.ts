@@ -1,7 +1,7 @@
 import type { MusicTrack } from '@/utils/types';
 const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY || '';
 
-export const searchYoutubeVideos = async (query: string): Promise<MusicTrack[]> => {
+export const searchYoutubeVideos = async (query: string, type: 'audio' | 'video' = 'video'): Promise<MusicTrack[]> => {
     if (!apiKey) {
         console.error("YouTube API Key is missing");
         return [];
@@ -21,8 +21,9 @@ export const searchYoutubeVideos = async (query: string): Promise<MusicTrack[]> 
         return data.items.map((item: any) => ({
             id: item.id.videoId,
             title: item.snippet.title,
-            addedBy: 'Search', // You might want to pass the username here if available context
-            // We could add thumbnail or duration if we update the MusicTrack interface
+            addedBy: 'Search',
+            thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url,
+            type: type
         }));
     } catch (error) {
         console.error("Error searching YouTube:", error);

@@ -20,14 +20,22 @@ export interface MusicTrack {
   title: string;
   addedBy: string;
   duration?: string;
+  thumbnail?: string;
+  type: 'audio' | 'video'; // New field
 }
 
-export interface MusicState {
+export interface PlaybackState {
   currentTrack: MusicTrack | null;
   isPlaying: boolean;
   queue: MusicTrack[];
   startedAt: number;
   pausedAt: number;
+}
+
+export interface MusicState {
+  audio: PlaybackState;
+  video: PlaybackState;
+  lastUpdated: number;
 }
 
 export interface RoomState {

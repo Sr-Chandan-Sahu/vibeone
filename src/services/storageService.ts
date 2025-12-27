@@ -39,19 +39,39 @@ export const subscribeToMusicState = (roomId: string, callback: (state: MusicSta
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data.musicState) {
-        callback(data.musicState as MusicState);
+        // Ensure default structure exists to prevent crashes if partial data exists in DB
+        const defaultState: MusicState = {
+          audio: { currentTrack: null, isPlaying: false, queue: [], startedAt: 0, pausedAt: 0 },
+          video: { currentTrack: null, isPlaying: false, queue: [], startedAt: 0, pausedAt: 0 },
+          lastUpdated: 0
+        };
+        const mergedState = {
+          ...defaultState,
+          ...data.musicState,
+          audio: { ...defaultState.audio, ...(data.musicState.audio || {}) },
+          video: { ...defaultState.video, ...(data.musicState.video || {}) }
+        };
+        callback(mergedState as MusicState);
       }
     }
   });
 };
 
-export const updateMusicState = async (roomId: string, newState: Partial<MusicState>) => {
+export const updateMusicState = async (roomId: string, newState: Partial<MusicState> | Record<string, any>) => {
   const roomRef = doc(db, ROOMS_COLLECTION, roomId);
 
   // Construct dot notation updates for nested fields
   const updates: any = {};
+
   for (const [key, value] of Object.entries(newState)) {
-    updates[`musicState.${key}`] = value;
+    if ((key === 'audio' || key === 'video') && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      // Flatten nested PlaybackState updates to avoid overwriting the whole object
+      for (const [subKey, subValue] of Object.entries(value)) {
+        updates[`musicState.${key}.${subKey}`] = subValue;
+      }
+    } else {
+      updates[`musicState.${key}`] = value;
+    }
   }
 
   // Ensure room exists (merge: true handles creation if missing, but we want to update)

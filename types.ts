@@ -33,6 +33,7 @@ export interface MusicTrack {
   title: string;
   addedBy: string;
   duration?: string;
+  thumbnail?: string;
 }
 
 export interface MusicState {

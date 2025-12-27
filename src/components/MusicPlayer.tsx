@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Volume2, Search, Trash2 } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Volume2, Search, Trash2, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -39,6 +39,7 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<MusicTrack[]>([]);
   const [volume, setVolume] = useState(100);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const playerRef = useRef<any>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
@@ -299,11 +300,37 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
     }
   };
 
+  // Drag and drop handlers for reordering queue
+  const handleDragStart = (index: number) => {
+    if (!isHost) return;
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = async (dropIndex: number) => {
+    if (draggedIndex === null || draggedIndex === dropIndex || !isHost || !roomId) return;
+
+    try {
+      const newQueue = [...state.queue];
+      const [draggedTrack] = newQueue.splice(draggedIndex, 1);
+      newQueue.splice(dropIndex, 0, draggedTrack);
+
+      await updateMusicState(roomId, { queue: newQueue });
+      setDraggedIndex(null);
+    } catch (error) {
+      console.error('Error reordering queue:', error);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Music Player Header */}
       <div className="border-b p-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Music {isHost && '(Host)'}</h2>
+        <h2 className="text-lg font-semibold">🎵 Music {isHost && '(Host)'}</h2>
         {onClose && (
           <button
             onClick={onClose}
@@ -318,6 +345,11 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
       <div className="p-4 border-b space-y-3">
         {state.currentTrack ? (
           <>
+            {/* YouTube Embed */}
+            <div className="aspect-video rounded-lg overflow-hidden bg-black/20">
+              <div ref={playerContainerRef} className="w-full h-full" />
+            </div>
+
             <div className="text-center">
               <h3 className="text-sm font-semibold line-clamp-2">
                 {state.currentTrack.title}
@@ -329,16 +361,16 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
 
             {/* Player Controls */}
             <div className="flex items-center justify-center gap-2">
-              <Button 
-                size="icon" 
-                variant="ghost" 
+              <Button
+                size="icon"
+                variant="ghost"
                 onClick={handlePrev}
                 disabled={!isHost}
               >
                 <SkipBack className="w-4 h-4" />
               </Button>
-              <Button 
-                size="icon" 
+              <Button
+                size="icon"
                 onClick={handlePlayPause}
                 disabled={!isHost}
               >
@@ -348,9 +380,9 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
                   <Play className="w-4 h-4" />
                 )}
               </Button>
-              <Button 
-                size="icon" 
-                variant="ghost" 
+              <Button
+                size="icon"
+                variant="ghost"
                 onClick={handleNext}
                 disabled={!isHost}
               >
@@ -372,10 +404,7 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
               <span className="text-xs text-muted-foreground w-8">{volume}%</span>
             </div>
 
-            {/* YouTube Embed */}
-            <div className="aspect-video rounded-lg overflow-hidden bg-black/20">
-              <div ref={playerContainerRef} className="w-full h-full" />
-            </div>
+
           </>
         ) : (
           <div className="text-center text-muted-foreground text-sm py-8">
@@ -404,22 +433,34 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
         <div className="p-4 space-y-2">
           {searchResults.length > 0 ? (
             <>
-              <h3 className="text-xs font-semibold text-muted-foreground mb-2">
+              <h3 className="text-xs font-semibold text-muted-foreground mb-3">
                 SEARCH RESULTS
               </h3>
               {searchResults.map((track) => (
-                <button
+                <div
                   key={track.id}
                   onClick={() => addToQueue(track)}
-                  className="w-full text-left p-2 rounded-lg hover:bg-secondary transition-colors text-sm line-clamp-1"
+                  className="p-2 rounded-lg hover:bg-secondary transition-colors cursor-pointer flex gap-3 items-start group"
                 >
-                  + {track.title}
-                </button>
+                  {/* Thumbnail */}
+                  <div className="w-12 h-12 rounded flex-shrink-0 bg-black/20 overflow-hidden">
+                    <img
+                      src={track.thumbnail || `https://img.youtube.com/vi/${track.id}/default.jpg`}
+                      alt={track.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  {/* Track Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium line-clamp-2">{track.title}</p>
+                    <p className="text-xs text-muted-foreground">+ Add to queue</p>
+                  </div>
+                </div>
               ))}
             </>
           ) : (
             <>
-              <h3 className="text-xs font-semibold text-muted-foreground mb-2">
+              <h3 className="text-xs font-semibold text-muted-foreground mb-3">
                 QUEUE ({state.queue.length})
               </h3>
               {state.queue.length === 0 ? (
@@ -430,15 +471,43 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
                 state.queue.map((track, index) => (
                   <div
                     key={`${track.id}-${index}`}
-                    className="p-2 rounded-lg hover:bg-secondary transition-colors text-sm line-clamp-1 flex items-center justify-between group"
+                    draggable={isHost}
+                    onDragStart={() => handleDragStart(index)}
+                    onDragOver={handleDragOver}
+                    onDrop={() => handleDrop(index)}
+                    className={`p-2 rounded-lg transition-colors text-sm flex gap-3 items-start group ${
+                      draggedIndex === index ? 'opacity-50 bg-secondary' : 'hover:bg-secondary'
+                    } ${isHost ? 'cursor-move' : ''}`}
                   >
-                    <span className="flex-1">
-                      {index + 1}. {track.title}
-                    </span>
+                    {/* Drag Handle */}
+                    {isHost && (
+                      <div className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1">
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                    )}
+
+                    {/* Thumbnail */}
+                    <div className="w-12 h-12 rounded flex-shrink-0 bg-black/20 overflow-hidden">
+                      <img
+                        src={track.thumbnail || `https://img.youtube.com/vi/${track.id}/default.jpg`}
+                        alt={track.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
+                    {/* Track Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium line-clamp-2">
+                        {index + 1}. {track.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">by {track.addedBy}</p>
+                    </div>
+
+                    {/* Delete Button */}
                     {isHost && (
                       <button
                         onClick={() => removeFromQueue(index)}
-                        className="opacity-0 group-hover:opacity-100 p-1 transition-opacity"
+                        className="opacity-0 group-hover:opacity-100 p-1 transition-opacity flex-shrink-0"
                         title="Remove from queue"
                       >
                         <Trash2 className="w-3 h-3 text-destructive" />

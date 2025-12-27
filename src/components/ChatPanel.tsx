@@ -50,18 +50,8 @@ export function ChatPanel({ user, roomId, onClose }: ChatPanelProps) {
     });
 
     // Add join message if not already present
-    const joinMessageId = `join-${user.id}`;
-    const alreadyJoined = messages.some(m => m.id === joinMessageId);
-    if (!alreadyJoined) {
-      saveMessage(roomId, {
-        id: joinMessageId,
-        roomId: roomId,
-        sender: { id: 'system', name: 'System', avatar: '' },
-        text: `${user.name} joined`,
-        timestamp: Date.now(),
-        type: 'system'
-      });
-    }
+    // Join message logic removed
+
 
     return () => {
       unsubMessages();
@@ -132,7 +122,8 @@ export function ChatPanel({ user, roomId, onClose }: ChatPanelProps) {
     }
   };
 
-  const displayMessages = currentAiMessage ? [...messages, currentAiMessage] : messages;
+  const displayMessages = (currentAiMessage ? [...messages, currentAiMessage] : messages)
+    .filter(msg => msg.type !== 'system');
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -150,7 +141,7 @@ export function ChatPanel({ user, roomId, onClose }: ChatPanelProps) {
       </div>
 
       {/* Messages Area */}
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 p-4 no-scrollbar">
         {displayMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             No messages yet. Start chatting!
