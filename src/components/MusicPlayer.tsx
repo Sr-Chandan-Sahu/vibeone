@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { searchYoutubeVideos } from '@/services/youtubeService';
 import { subscribeToMusicState, updateMusicState } from '@/services/storageService';
-import type { MusicTrack, MusicState, User } from '@/utils/types';
+import type { MusicTrack, PlaybackState, User } from '@/utils/types';
 
 interface MusicPlayerProps {
   roomId?: string;
@@ -21,7 +21,7 @@ declare global {
 }
 
 export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
-  const [state, setState] = useState<MusicState>({
+  const [state, setState] = useState<PlaybackState>({
     currentTrack: null,
     isPlaying: false,
     queue: [],
@@ -55,9 +55,11 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
       if (state.queue.length === 0) {
         // No more tracks
         await updateMusicState(roomId, {
-          currentTrack: null,
-          isPlaying: false,
-          queue: []
+          audio: {
+            currentTrack: null,
+            isPlaying: false,
+            queue: []
+          }
         });
         return;
       }
@@ -66,10 +68,12 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
       const remainingQueue = state.queue.slice(1);
 
       await updateMusicState(roomId, {
-        currentTrack: nextTrack,
-        isPlaying: true,
-        startedAt: Date.now(),
-        queue: remainingQueue
+        audio: {
+          currentTrack: nextTrack,
+          isPlaying: true,
+          startedAt: Date.now(),
+          queue: remainingQueue
+        }
       });
     } catch (error) {
       console.error('Error skipping to next track:', error);
@@ -83,9 +87,11 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
       const newIsPlaying = !state.isPlaying;
 
       await updateMusicState(roomId, {
-        isPlaying: newIsPlaying,
-        startedAt: newIsPlaying ? Date.now() : state.startedAt,
-        pausedAt: !newIsPlaying ? playerRef.current?.getCurrentTime?.() ?? 0 : state.pausedAt
+        audio: {
+          isPlaying: newIsPlaying,
+          startedAt: newIsPlaying ? Date.now() : state.startedAt,
+          pausedAt: !newIsPlaying ? playerRef.current?.getCurrentTime?.() ?? 0 : state.pausedAt
+        }
       });
     } catch (error) {
       console.error('Error toggling play/pause:', error);
@@ -100,9 +106,11 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
       if (currentIndex > 0) {
         const prevTrack = state.queue[currentIndex - 1];
         await updateMusicState(roomId, {
-          currentTrack: prevTrack,
-          isPlaying: true,
-          startedAt: Date.now()
+          audio: {
+            currentTrack: prevTrack,
+            isPlaying: true,
+            startedAt: Date.now()
+          }
         });
       }
     } catch (error) {
@@ -116,8 +124,10 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
 
     try {
       const unsubscribe = subscribeToMusicState(roomId, (musicState) => {
-        setState(musicState);
-        syncPlayer(musicState);
+        // Extract the audio playback state from the full music state
+        const audioState = musicState.audio;
+        setState(audioState);
+        syncPlayer(audioState);
       });
 
       return () => {
@@ -200,7 +210,7 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
   }, [roomId, volume, isHost, handleNext]);
 
   // Sync Logic: Make the actual IFrame match the State
-  const syncPlayer = (targetState: MusicState) => {
+  const syncPlayer = (targetState: PlaybackState) => {
     if (!playerRef.current || typeof playerRef.current.loadVideoById !== 'function') return;
 
     const player = playerRef.current;
@@ -263,14 +273,16 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
 
       if (!state.currentTrack) {
         await updateMusicState(roomId, {
-          currentTrack: newTrack,
-          isPlaying: true,
-          startedAt: Date.now(),
-          queue: state.queue
+          audio: {
+            currentTrack: newTrack,
+            isPlaying: true,
+            startedAt: Date.now(),
+            queue: state.queue
+          }
         });
       } else {
         const newQueue = [...state.queue, newTrack];
-        await updateMusicState(roomId, { queue: newQueue });
+        await updateMusicState(roomId, { audio: { queue: newQueue } });
       }
 
       setSearchResults([]);
@@ -286,7 +298,7 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
     try {
       const newQueue = [...state.queue];
       newQueue.splice(index, 1);
-      await updateMusicState(roomId, { queue: newQueue });
+      await updateMusicState(roomId, { audio: { queue: newQueue } });
     } catch (error) {
       console.error('Error removing from queue:', error);
     }
@@ -319,7 +331,7 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
       const [draggedTrack] = newQueue.splice(draggedIndex, 1);
       newQueue.splice(dropIndex, 0, draggedTrack);
 
-      await updateMusicState(roomId, { queue: newQueue });
+      await updateMusicState(roomId, { audio: { queue: newQueue } });
       setDraggedIndex(null);
     } catch (error) {
       console.error('Error reordering queue:', error);
@@ -475,9 +487,8 @@ export function MusicPlayer({ roomId, user, onClose }: MusicPlayerProps) {
                     onDragStart={() => handleDragStart(index)}
                     onDragOver={handleDragOver}
                     onDrop={() => handleDrop(index)}
-                    className={`p-2 rounded-lg transition-colors text-sm flex gap-3 items-start group ${
-                      draggedIndex === index ? 'opacity-50 bg-secondary' : 'hover:bg-secondary'
-                    } ${isHost ? 'cursor-move' : ''}`}
+                    className={`p-2 rounded-lg transition-colors text-sm flex gap-3 items-start group ${draggedIndex === index ? 'opacity-50 bg-secondary' : 'hover:bg-secondary'
+                      } ${isHost ? 'cursor-move' : ''}`}
                   >
                     {/* Drag Handle */}
                     {isHost && (

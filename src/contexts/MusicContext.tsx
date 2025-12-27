@@ -1,5 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { MusicState } from '@/utils/types';
+
+const defaultPlaybackState = {
+  currentTrack: null,
+  isPlaying: false,
+  queue: [],
+  startedAt: 0,
+  pausedAt: 0
+};
 
 interface MusicContextType {
   globalMusicState: MusicState;
@@ -12,11 +20,9 @@ const MusicContext = createContext<MusicContextType | undefined>(undefined);
 
 export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [globalMusicState, setGlobalMusicState] = useState<MusicState>({
-    currentTrack: null,
-    isPlaying: false,
-    queue: [],
-    startedAt: 0,
-    pausedAt: 0
+    audio: defaultPlaybackState,
+    video: defaultPlaybackState,
+    lastUpdated: Date.now()
   });
 
   const [isLoggedOut, setIsLoggedOut] = useState(false);
@@ -24,18 +30,17 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const updateGlobalMusicState = useCallback((newState: Partial<MusicState>) => {
     setGlobalMusicState(prev => ({
       ...prev,
-      ...newState
+      ...newState,
+      lastUpdated: Date.now()
     }));
   }, []);
 
   const logout = useCallback(() => {
     setIsLoggedOut(true);
     setGlobalMusicState({
-      currentTrack: null,
-      isPlaying: false,
-      queue: [],
-      startedAt: 0,
-      pausedAt: 0
+      audio: defaultPlaybackState,
+      video: defaultPlaybackState,
+      lastUpdated: Date.now()
     });
   }, []);
 
