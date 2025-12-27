@@ -5,7 +5,6 @@ import {
   UserPlus,
   Share,
   QrCode,
-  Info,
   Heart,
   Volume2,
   Shuffle,
@@ -18,11 +17,16 @@ import {
   Mic,
   Headphones,
   Monitor,
-  User as UserIcon,
   Search,
   X,
-  Loader2
+  Loader2,
+  Plus,
+  MessageSquare
 } from "lucide-react";
+
+
+
+
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -59,7 +63,20 @@ export default function RoomPage() {
   const params = useParams<{ code: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"audio" | "video" | "about">("audio");
+  const [activeTab, setActiveTab] = useState<"home" | "audio" | "video" | "chat">("home");
+
+
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const [queueTab, setQueueTab] = useState<"queue" | "recent">("queue");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [participants, setParticipants] = useState<User[]>([]);
@@ -524,10 +541,10 @@ export default function RoomPage() {
     <div className="min-h-screen bg-[#000000] relative overflow-hidden">
       {/* Header */}
       <header className="relative z-20 flex items-center justify-between px-6 lg:px-10 py-4">
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <img src={logoImg} alt="VIBEONE" className="w-10 h-10" />
-          <div className="flex flex-col">
+        {/* Logo - Hide on mobile if showing Room ID at top? Images show Logout & UserPlus on mobile top */}
+        <div className="flex items-center gap-3 lg:flex">
+          <img src={logoImg} alt="VIBEONE" className="hidden lg:block w-10 h-10" />
+          <div className="hidden lg:flex flex-col">
             <span
               className="text-white text-2xl font-bold tracking-wider"
               style={{ fontFamily: "'neomax', sans-serif" }}
@@ -538,21 +555,41 @@ export default function RoomPage() {
           </div>
         </div>
 
-        {/* About Link */}
-        <button
-          onClick={() => setActiveTab("about")}
-          className="text-white font-bold text-lg tracking-widest hover:text-white/80 transition-colors"
-          style={{ fontFamily: "'neomax', sans-serif" }}
-        >
-          ABOUT
-        </button>
+        {/* Mobile Top Controls */}
+        <div className="lg:hidden flex items-center justify-between w-full">
+          <button
+            onClick={leaveRoom}
+            className="p-2 transition-all"
+          >
+            <LogOut className="w-6 h-6 text-white" />
+          </button>
+
+          <div className="flex flex-col items-center">
+            <p className="text-white/50 text-[10px] mb-0.5">Room ID</p>
+            <h2 className="text-xl font-bold text-white tracking-wider" style={{ fontFamily: "'neomax', sans-serif" }}>
+              {params.code}
+            </h2>
+          </div>
+
+          <button
+            onClick={copyRoomCode}
+            className="p-2 transition-all"
+          >
+            <UserPlus className="w-6 h-6 text-white" />
+          </button>
+        </div>
+
+        {/* Header content - Desktop About removed as per user request */}
+
       </header>
 
-      {/* Main Content */}
-      <div className="flex h-[calc(100vh-72px)]">
 
-        {/* Left Sidebar */}
-        <aside className="w-72 p-6 flex flex-col">
+      {/* Main Content */}
+      <div className="flex flex-col lg:flex-row h-[calc(100vh-72px)] overflow-hidden">
+
+        {/* Left Sidebar - Desktop only */}
+        <aside className="hidden lg:flex w-72 p-6 flex-col">
+
           {/* Room ID Section */}
           <div className="flex items-center justify-between mb-8">
             <button
@@ -594,14 +631,15 @@ export default function RoomPage() {
                 <span className="text-xs text-white/70">Share QR</span>
               </button>
               <button
-                onClick={() => setActiveTab("about")}
+                onClick={() => setActiveTab("chat")}
                 className="flex flex-col items-center gap-2"
               >
                 <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center hover:bg-white/90 transition-all">
-                  <Info className="w-4 h-4 text-gray-900" />
+                  <MessageSquare className="w-4 h-4 text-gray-900" />
                 </div>
-                <span className="text-xs text-white/70">About us</span>
+                <span className="text-xs text-white/70">Chat Room</span>
               </button>
+
             </div>
           </div>
 
@@ -711,10 +749,98 @@ export default function RoomPage() {
           )}
         </aside>
 
-        {/* Center Content */}
-        <main className="flex-1 p-6">
+        {/* Main Content */}
+        <main className="flex-1 p-4 lg:p-6 overflow-y-auto no-scrollbar pb-24 relative">
+          {/* Mobile Home Tab */}
+          {activeTab === "home" && isMobile && (
+            <div className="space-y-8 animate-slide-up">
+              {/* Instant Invite */}
+              <div className="pt-2">
+                <p className="text-white/50 text-sm mb-4 ml-1">Instant invite</p>
+                <div className="flex gap-4">
+                  <button onClick={copyRoomLink} className="flex flex-col items-center gap-2">
+                    <div className="w-16 h-16 bg-white rounded-[20px] flex items-center justify-center hover:bg-white/90 transition-all shadow-lg">
+                      <Share className="w-6 h-6 text-gray-900" />
+                    </div>
+                    <span className="text-xs text-blue-400 font-medium tracking-tight">Share QR</span>
+                  </button>
+                  <button onClick={copyRoomCode} className="flex flex-col items-center gap-2">
+                    <div className="w-16 h-16 bg-white rounded-[20px] flex items-center justify-center hover:bg-white/90 transition-all shadow-lg">
+                      <QrCode className="w-6 h-6 text-gray-900" />
+                    </div>
+                    <span className="text-xs text-blue-400">Scan QR</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("chat")}
+                    className="flex flex-col items-center gap-2"
+                  >
+                    <div className="w-16 h-16 bg-white rounded-[20px] flex items-center justify-center hover:bg-white/90 transition-all shadow-lg">
+                      <MessageSquare className="w-6 h-6 text-gray-900" />
+                    </div>
+                    <span className="text-xs text-blue-400">Join Chat</span>
+                  </button>
+
+
+                </div>
+              </div>
+
+              {/* Room Members */}
+              <div>
+                <p className="text-white/50 text-sm mb-4 ml-1">Room members</p>
+                <div className="flex flex-wrap gap-3">
+                  {participants.length > 0 ? participants.map((member, index) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center gap-2 bg-[#0d0d0d] border border-white/10 rounded-full pl-1.5 pr-4 py-1.5 shadow-sm"
+                    >
+                      <Avatar className="w-9 h-9 border-2 border-white/10">
+                        <AvatarFallback className={avatarColors[index % avatarColors.length]}>
+                          {member.name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-white font-medium">{member.name}</span>
+                    </div>
+                  )) : (
+                    <p className="text-white/40 text-sm">No members yet</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Mobile Now Playing Mini Player (if any) */}
+              {(musicState.audio.currentTrack || musicState.video.currentTrack) && (
+                <div className="fixed bottom-28 left-4 right-4 z-40">
+                  <div className="bg-[#121212]/90 backdrop-blur-xl border border-white/10 rounded-[32px] p-2 pr-6 flex items-center gap-4 shadow-2xl">
+                    <div className="w-12 h-12 rounded-2xl overflow-hidden bg-white/5 flex-shrink-0">
+                      <img
+                        src={musicState.audio.currentTrack?.thumbnail || musicState.video.currentTrack?.thumbnail}
+                        alt="Current"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-[13px] font-medium truncate">
+                        {musicState.audio.currentTrack?.title || musicState.video.currentTrack?.title}
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <Pause className="w-4 h-4 text-white" />
+                          <SkipForward className="w-4 h-4 text-white/50" />
+                          <Volume2 className="w-4 h-4 text-white/50 ml-1" />
+                        </div>
+                        <span className="text-white/50 text-[11px] truncate">
+                          {musicState.audio.currentTrack?.addedBy || musicState.video.currentTrack?.addedBy}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === "audio" && (
             <div className="max-w-lg mx-auto h-full flex flex-col">
+
               <div className="shrink-0">
                 {/* Now Playing Header */}
                 <div className="flex items-center justify-between">
@@ -791,87 +917,182 @@ export default function RoomPage() {
                 </div>
 
               </div>
-              {/* Audio Queue Section */}
-              <div className="flex-1 min-h-0 flex flex-col mt-2">
-                <div className="flex justify-center gap-2 mb-4">
-                  <button
-                    onClick={() => setQueueTab("queue")}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${queueTab === "queue"
-                      ? "bg-white text-gray-900"
-                      : "bg-white/10 text-white/70 border border-white/20"
-                      }`}
-                  >
-                    Queue ({musicState.audio.queue?.length || 0})
-                  </button>
-                  <button
-                    onClick={() => setQueueTab("recent")}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${queueTab === "recent"
-                      ? "bg-white text-gray-900"
-                      : "bg-white/10 text-white/70 border border-white/20"
-                      }`}
-                  >
-                    Recent
-                  </button>
-                </div>
+              {/* Audio Queue Section - Desktop only */}
+              {!isMobile && (
+                <div className="flex-1 min-h-0 flex flex-col mt-2">
+                  <div className="flex justify-center gap-2 mb-4">
+                    <button
+                      onClick={() => setQueueTab("queue")}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${queueTab === "queue"
+                        ? "bg-white text-gray-900"
+                        : "bg-white/10 text-white/70 border border-white/20"
+                        }`}
+                    >
+                      Queue ({musicState.audio.queue?.length || 0})
+                    </button>
+                    <button
+                      onClick={() => setQueueTab("recent")}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${queueTab === "recent"
+                        ? "bg-white text-gray-900"
+                        : "bg-white/10 text-white/70 border border-white/20"
+                        }`}
+                    >
+                      Recent
+                    </button>
+                  </div>
 
-                <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                  {queueTab === "queue" ? (
-                    (musicState.audio?.queue || []).length > 0 ? (
-                      (musicState.audio?.queue || []).map((song) => (
-                        <div key={song.id} className="flex items-center gap-3 bg-white/5 rounded-xl p-2 group">
-                          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center overflow-hidden">
-                            {song.thumbnail ? (
-                              <img src={song.thumbnail} alt={song.title} className="w-full h-full object-cover" />
-                            ) : (
-                              <Headphones className="w-5 h-5 text-white/50" />
-                            )}
+                  <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                    {queueTab === "queue" ? (
+                      (musicState.audio?.queue || []).length > 0 ? (
+                        (musicState.audio?.queue || []).map((song) => (
+                          <div key={song.id} className="flex items-center gap-3 bg-white/5 rounded-xl p-2 group">
+                            <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center overflow-hidden">
+                              {song.thumbnail ? (
+                                <img src={song.thumbnail} alt={song.title} className="w-full h-full object-cover" />
+                              ) : (
+                                <Headphones className="w-5 h-5 text-white/50" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm truncate">{song.title}</p>
+                              <p className="text-green-400 text-xs">Added by {song.addedBy}</p>
+                            </div>
+                            <button
+                              onClick={() => removeFromQueue(song.id)}
+                              className="p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 className="w-4 h-4 text-white/50 hover:text-red-400" />
+                            </button>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white text-sm truncate">{song.title}</p>
-                            <p className="text-green-400 text-xs">Added by {song.addedBy}</p>
-                          </div>
-                          <button
-                            onClick={() => removeFromQueue(song.id)}
-                            className="p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        ))
+                      ) : (
+                        <p className="text-white/40 text-sm text-center py-4">Queue is empty. Search for songs!</p>
+                      )
+                    ) : (
+                      recentPlayed.length > 0 ? (
+                        recentPlayed.map((song) => (
+                          <div
+                            key={song.id}
+                            className="flex items-center gap-3 bg-white/5 rounded-xl p-2 group cursor-pointer hover:bg-white/10"
+                            onClick={() => playTrack(song)}
                           >
-                            <Trash2 className="w-4 h-4 text-white/50 hover:text-red-400" />
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-white/40 text-sm text-center py-4">Queue is empty. Search for songs!</p>
-                    )
-                  ) : (
-                    recentPlayed.length > 0 ? (
-                      recentPlayed.map((song) => (
-                        <div
-                          key={song.id}
-                          className="flex items-center gap-3 bg-white/5 rounded-xl p-2 group cursor-pointer hover:bg-white/10"
-                          onClick={() => playTrack(song)}
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center overflow-hidden">
-                            {song.thumbnail ? (
-                              <img src={song.thumbnail} alt={song.title} className="w-full h-full object-cover" />
-                            ) : (
-                              <Headphones className="w-5 h-5 text-white/50" />
-                            )}
+                            <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center overflow-hidden">
+                              {song.thumbnail ? (
+                                <img src={song.thumbnail} alt={song.title} className="w-full h-full object-cover" />
+                              ) : (
+                                <Headphones className="w-5 h-5 text-white/50" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm truncate">{song.title}</p>
+                              <p className="text-white/50 text-xs">Played recently</p>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white text-sm truncate">{song.title}</p>
-                            <p className="text-white/50 text-xs">Played recently</p>
+                        ))
+                      ) : (
+                        <p className="text-white/40 text-sm text-center py-4">No recent tracks</p>
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Mobile Integrated Search & Chat for Audio */}
+              {isMobile && (
+                <div className="flex-1 flex flex-col mt-4 min-h-0">
+                  {/* Mobile Search Bar */}
+                  <div className="flex gap-2 mb-4 shrink-0">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                      placeholder="Search Songs"
+                      className="flex-1 bg-[#1a1a1a] border border-white/10 rounded-full px-5 py-3 text-white placeholder:text-white/40 text-sm focus:outline-none"
+                    />
+                    <button
+                      onClick={() => setActiveTab("chat")}
+                      className="px-6 py-3 bg-white text-black rounded-full font-bold text-sm"
+                    >
+                      Chat
+                    </button>
+                  </div>
+
+                  {/* Search Results or Chat Integrated */}
+                  <div className="flex-1 overflow-y-auto no-scrollbar">
+                    {showSearchResults ? (
+                      <div className="space-y-3">
+                        <p className="text-white/50 text-xs mb-2">Search Result</p>
+                        {searchResults.map((track) => (
+                          <div
+                            key={track.id}
+                            onClick={() => addToQueue(track)}
+                            className="flex items-center gap-3 bg-[#121212] border border-white/5 rounded-[24px] p-2 pr-4"
+                          >
+                            <div className="w-14 h-14 rounded-2xl overflow-hidden flex-shrink-0">
+                              <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-[13px] font-medium truncate">{track.title}</p>
+                              <p className="text-white/40 text-[11px]">Add to queue</p>
+                            </div>
+                            <div className="w-8 h-8 rounded-xl border border-white/20 flex items-center justify-center">
+                              <Plus className="w-4 h-4 text-white" />
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        ))}
+                      </div>
                     ) : (
-                      <p className="text-white/40 text-sm text-center py-4">No recent tracks</p>
-                    )
+                      <div className="space-y-4">
+                        {messages.slice(-10).map((msg, idx) => (
+                          <div key={msg.id} className="flex gap-3">
+                            <Avatar className="w-10 h-10 border border-white/10">
+                              <AvatarFallback className={avatarColors[idx % avatarColors.length]}>
+                                {msg.sender.name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-white/50 text-[11px] mb-1">{msg.sender.name}</p>
+                              <div className="bg-[#1a1a1a] border border-white/5 rounded-[20px] px-4 py-2.5">
+                                <p className="text-white text-[14px]">{msg.text}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <div ref={messagesEndRef} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Message Input - Only show if not searching */}
+                  {!showSearchResults && (
+                    <div className="mt-4 flex items-center gap-2 pb-2">
+                      <div className="flex-1 flex items-center bg-[#1a1a1a] border border-white/10 rounded-full px-4 py-2.5">
+                        <input
+                          type="text"
+                          value={messageInput}
+                          onChange={(e) => setMessageInput(e.target.value)}
+                          onKeyPress={handleKeyPress}
+                          placeholder="Enter message"
+                          className="flex-1 bg-transparent text-white text-[14px] focus:outline-none"
+                        />
+                        <Mic className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <button
+                        onClick={sendMessage}
+                        className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" className="w-5 h-5">
+                          <path d="M12 19V5M12 5l-7 7m7-7l7 7" />
+                        </svg>
+                      </button>
+                    </div>
                   )}
                 </div>
-              </div>
-
-              {/* Hidden YouTube Player for Audio - REMOVED from here, moved to persistent location */}
+              )}
             </div>
           )}
+
 
           {activeTab === "video" && (
             <div className="max-w-3xl mx-auto">
@@ -946,95 +1167,181 @@ export default function RoomPage() {
                   <Volume2 className="w-5 h-5 text-white/70" />
                 </button>
               </div>
+
+              {/* Mobile Integrated Search & Chat for Video */}
+              {isMobile && (
+                <div className="flex-1 flex flex-col mt-4 min-h-0">
+                  {/* Mobile Search Bar - reusing the same logic but for video */}
+                  <div className="flex gap-2 mb-4 shrink-0">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                      placeholder="Search Videos"
+                      className="flex-1 bg-[#1a1a1a] border border-white/10 rounded-full px-5 py-3 text-white placeholder:text-white/40 text-sm focus:outline-none"
+                    />
+                    <button
+                      onClick={() => setActiveTab("chat")}
+                      className="px-6 py-3 bg-white text-black rounded-full font-bold text-sm"
+                    >
+                      Chat
+                    </button>
+
+                  </div>
+
+                  {/* Search Results or Chat Integrated */}
+                  <div className="flex-1 overflow-y-auto no-scrollbar">
+                    {showSearchResults ? (
+                      <div className="space-y-3">
+                        <p className="text-white/50 text-xs mb-2 ml-1">Search Result</p>
+                        {searchResults.map((track) => (
+                          <div
+                            key={track.id}
+                            onClick={() => addToQueue(track)}
+                            className="flex items-center gap-3 bg-[#121212] border border-white/5 rounded-[24px] p-2 pr-4"
+                          >
+                            <div className="w-14 h-14 rounded-2xl overflow-hidden flex-shrink-0">
+                              <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-[13px] font-medium truncate">{track.title}</p>
+                              <p className="text-white/40 text-[11px]">Add to queue</p>
+                            </div>
+                            <div className="w-8 h-8 rounded-xl border border-white/20 flex items-center justify-center">
+                              <Plus className="w-4 h-4 text-white" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {messages.slice(-10).map((msg, idx) => (
+                          <div key={msg.id} className="flex gap-3 animate-slide-up" style={{ animationDelay: `${idx * 0.05}s` }}>
+                            <Avatar className="w-10 h-10 border border-white/10 shadow-sm">
+                              <AvatarFallback className={avatarColors[idx % avatarColors.length]}>
+                                {msg.sender.name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-white/50 text-[11px] mb-1 ml-1">{msg.sender.name}</p>
+                              <div className="bg-[#1a1a1a] border border-white/5 rounded-[22px] px-4 py-2.5 shadow-md">
+                                <p className="text-white text-[14px] leading-snug">{msg.text}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <div ref={messagesEndRef} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Message Input - Only show if not searching */}
+                  {!showSearchResults && (
+                    <div className="mt-4 flex items-center gap-2 pb-2">
+                      <div className="flex-1 flex items-center bg-[#1a1a1a] border border-white/10 rounded-full px-5 py-3 shadow-inner">
+                        <input
+                          type="text"
+                          value={messageInput}
+                          onChange={(e) => setMessageInput(e.target.value)}
+                          onKeyPress={handleKeyPress}
+                          placeholder="Enter message"
+                          className="flex-1 bg-transparent text-white text-[14px] focus:outline-none"
+                        />
+                        <Mic className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <button
+                        onClick={sendMessage}
+                        className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-xl active:scale-95 transition-transform"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" className="w-6 h-6">
+                          <path d="M12 19V5M12 5l-7 7m7-7l7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {activeTab === "about" && (<> </>
-            // <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-5xl mx-auto">
-            //   {/* Left Column */}
-            //   <div>
-            //     <h2
-            //       className="text-2xl font-bold text-white mb-4 tracking-wide"
-            //       style={{ fontFamily: "'neomax', sans-serif" }}
-            //     >
-            //       ABOUT VIBEONE
-            //     </h2>
-            //     <p className="text-white/60 text-sm leading-relaxed mb-8">
-            //       VIBEONE WAS CREATED WITH A SIMPLE BELIEF: CONNECTION FEELS STRONGER WHEN EXPERIENCED TOGETHER.
-            //       IN A WORLD WHERE CONTENT IS ENDLESSLY CONSUMED ALONE, VIBEONE BRINGS PEOPLE INTO SHARED MOMENTS—LISTENING TO THE SAME MUSIC, WATCHING THE SAME VIDEOS, AND CHATTING IN REAL TIME.
-            //       WHETHER YOU'RE CONNECTING WITH FRIENDS OR MEETING NEW PEOPLE, VIBEONE KEEPS EVERYONE PERFECTLY IN SYNC, TURNING CONTENT INTO CONVERSATION AND MOMENTS INTO MEMORIES.
-            //     </p>
+          {activeTab === "chat" && isMobile && (
+            <div className="h-screen flex flex-col -mt-4 pb-24">
+              <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar pt-4 px-1">
+                {messages.length > 0 ? (
+                  messages.map((msg, index) => {
+                    const isOwn = msg.sender.id === currentUser?.id;
+                    return (
+                      <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'} animate-slide-up`}>
+                        <div className={`flex items-start gap-3 max-w-[85%] ${isOwn ? 'flex-row-reverse' : ''}`}>
+                          {!isOwn && (
+                            <Avatar className="w-10 h-10 border border-white/10 flex-shrink-0">
+                              <AvatarFallback className={avatarColors[index % avatarColors.length]}>
+                                {msg.sender.name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                          )}
+                          <div className="flex flex-col">
+                            {!isOwn && <p className="text-white/50 text-[11px] ml-1 mb-1">{msg.sender.name}</p>}
+                            <div className={`px-5 py-3 rounded-[24px] ${isOwn
+                              ? 'bg-white text-black'
+                              : 'bg-[#1a1a1a] text-white border border-white/5 shadow-md'
+                              }`}>
+                              <p className="text-[14px] leading-relaxed font-medium">{msg.text}</p>
+                            </div>
+                            <p className={`text-white/30 text-[10px] mt-1.5 ${isOwn ? 'text-right mr-1' : 'text-left ml-1'}`}>
+                              {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full opacity-30">
+                    <MessageSquare className="w-12 h-12 mb-4" />
+                    <p className="text-sm">No messages yet. Start the conversation!</p>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
 
-            //     <h2
-            //       className="text-2xl font-bold text-white mb-4 tracking-wide"
-            //       style={{ fontFamily: "'neomax', sans-serif" }}
-            //     >
-            //       THE VISION
-            //     </h2>
-            //     <p className="text-white/60 text-sm leading-relaxed mb-8">
-            //       VIBEONE ISN'T JUST ANOTHER STREAMING OR CHAT APP. IT'S A SOCIAL EXPERIENCE LAYER—WHERE MUSIC, MOVIES, AND PEOPLE COME TOGETHER NATURALLY.
-            //       OUR GOAL IS TO REMOVE DISTANCE, DELAY, AND FRICTION FROM SHARED EXPERIENCES, MAKING DIGITAL INTERACTIONS FEEL MORE HUMAN, LIVE, AND MEANINGFUL.
-            //     </p>
-
-            //     <button className="flex items-center gap-2 bg-[#c8f542] text-gray-900 font-bold px-8 py-4 rounded-xl hover:bg-[#d4f76a] transition-all">
-            //       Get in touch
-            //       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            //         <path d="M7 17L17 7M17 7H7M17 7V17" />
-            //       </svg>
-            //     </button>
-            //   </div>
-
-            //   {/* Right Column */}
-            //   <div>
-            //     {/* Logical Loops Logo */}
-            //     <div className="flex items-center gap-4 mb-8">
-            //       <img src={logoImg} alt="Logical Loops" className="w-24 h-24" />
-            //       <div>
-            //         <p
-            //           className="text-3xl font-bold bg-gradient-to-r from-red-400 via-yellow-400 to-green-400 bg-clip-text text-transparent"
-            //           style={{ fontFamily: "'neomax', sans-serif" }}
-            //         >
-            //           Logical
-            //         </p>
-            //         <p className="text-white/70 text-xl italic">Loops</p>
-            //       </div>
-            //     </div>
-
-            //     <h2
-            //       className="text-xl font-bold text-white mb-4 tracking-wide"
-            //       style={{ fontFamily: "'neomax', sans-serif" }}
-            //     >
-            //       BUILT WITH LOGICAL LOOPS
-            //     </h2>
-            //     <p className="text-white/60 text-sm leading-relaxed mb-8">
-            //       VIBEONE IS DEVELOPED BY LOGICAL LOOPS, A SOFTWARE DEVELOPMENT COMPANY FOCUSED ON TURNING IDEAS INTO SCALABLE, PRODUCTION-READY DIGITAL SOLUTIONS.
-            //     </p>
-
-            //     <h2
-            //       className="text-xl font-bold text-white mb-4 tracking-wide"
-            //       style={{ fontFamily: "'neomax', sans-serif" }}
-            //     >
-            //       ABOUT THE FOUNDER
-            //     </h2>
-            //     <p className="text-white/60 text-sm leading-relaxed">
-            //       VIBEONE IS FOUNDED BY <span className="text-[#c8f542]">REVAN VEERA CHARI</span>, A PRODUCT DESIGNER AND TECHNOLOGIST WITH 4+ YEARS OF EXPERIENCE IN BUILDING USER-CENTERED DIGITAL PRODUCTS ACROSS MOBILE AND WEB PLATFORMS.
-            //       WITH A STRONG BACKGROUND IN UI/UX DESIGN, PRODUCT THINKING, AND EXECUTION, REVAN FOCUSES ON CREATING EXPERIENCES THAT BALANCE CLARITY, SPEED, AND EMOTIONAL CONNECTION—ESPECIALLY IN REAL-TIME, DATA-DRIVEN, AND SOCIAL PRODUCTS.
-            //     </p>
-            //     <a href="https://www.linkedin.com/in/revanveerachari/" target="_blank" rel="noopener noreferrer" className="text-[#c8f542] text-sm hover:underline mt-2 inline-block">
-            //       ✓ LINKEDIN:
-            //     </a>
-            //   </div>
-            // </div>
+              {/* Chat Input Bar for Mobile Tab */}
+              <div className="mt-4 flex items-center gap-2 pb-8">
+                <div className="flex-1 flex items-center bg-[#1a1a1a] border border-white/10 rounded-full px-5 py-3.5 shadow-inner">
+                  <input
+                    type="text"
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Type a message..."
+                    className="flex-1 bg-transparent text-white text-[15px] focus:outline-none"
+                  />
+                  <Mic className="w-5 h-5 text-blue-400" />
+                </div>
+                <button
+                  onClick={sendMessage}
+                  disabled={!messageInput.trim()}
+                  className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-xl active:scale-95 transition-transform disabled:opacity-50"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" className="w-6 h-6">
+                    <path d="M12 19V5M12 5l-7 7m7-7l7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           )}
+
           {/* Persistent YouTube Player for Audio/Background */}
           <div className="absolute top-0 right-0 w-1 h-1 opacity-0 pointer-events-none overflow-hidden">
             <div ref={playerContainerRef} />
           </div>
         </main>
 
-        {/* Right Sidebar - Chat & Search */}
-        {(activeTab === "audio" || activeTab === "video") && (
+        {/* Right Sidebar - Chat & Search (Desktop only) */}
+        {!isMobile && (activeTab === "audio" || activeTab === "video") && (
           <aside className="w-80 p-6 flex flex-col">
+
             {/* Search Section */}
             <div className="relative mb-6">
               <div className="flex gap-2">
@@ -1181,36 +1488,58 @@ export default function RoomPage() {
 
       {/* Bottom Navigation */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-        <div className="flex items-center gap-1 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full p-1.5">
+        <div className="flex items-center gap-1 bg-black/40 backdrop-blur-xl border border-white/20 rounded-[35px] p-2">
+          {isMobile && (
+            <button
+              onClick={() => setActiveTab("home")}
+              className={`p-4 rounded-full transition-all ${activeTab === "home"
+                ? "bg-white text-black shadow-lg"
+                : "text-white/70 hover:bg-white/10"
+                }`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill={activeTab === "home" ? "black" : "none"}
+                stroke="currentColor"
+                strokeWidth="2.5"
+                className="w-6 h-6"
+              >
+                <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={() => setActiveTab("audio")}
-            className={`p-3.5 rounded-full transition-all ${activeTab === "audio"
-              ? "bg-white text-gray-900"
+            className={`p-4 rounded-full transition-all ${activeTab === "audio"
+              ? "bg-white text-black shadow-lg"
               : "text-white/70 hover:bg-white/10"
               }`}
           >
-            <Headphones className="w-5 h-5" />
+            <Headphones className="w-6 h-6" strokeWidth={activeTab === "audio" ? 2.5 : 2} />
           </button>
           <button
             onClick={() => setActiveTab("video")}
-            className={`p-3.5 rounded-full transition-all ${activeTab === "video"
-              ? "bg-white text-gray-900"
+            className={`p-4 rounded-full transition-all ${activeTab === "video"
+              ? "bg-white text-black shadow-lg"
               : "text-white/70 hover:bg-white/10"
               }`}
           >
-            <Monitor className="w-5 h-5" />
+            <Monitor className="w-6 h-6" strokeWidth={activeTab === "video" ? 2.5 : 2} />
           </button>
           <button
-            onClick={() => setActiveTab("about")}
-            className={`p-3.5 rounded-full transition-all ${activeTab === "about"
-              ? "bg-white text-gray-900"
+            onClick={() => setActiveTab("chat")}
+            className={`p-4 rounded-full transition-all ${activeTab === "chat"
+              ? "bg-white text-black shadow-lg"
               : "text-white/70 hover:bg-white/10"
               }`}
           >
-            <UserIcon className="w-5 h-5" />
+            <MessageSquare className="w-6 h-6" strokeWidth={activeTab === "chat" ? 2.5 : 2} />
           </button>
+
+
         </div>
       </div>
+
     </div>
   );
 }
