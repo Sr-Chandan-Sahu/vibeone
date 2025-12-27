@@ -29,8 +29,8 @@ export default function Home() {
 
       {/* Header */}
       <header className="relative z-20 flex items-center justify-between px-6 md:px-12 py-6">
-        {/* Logo */}
-        <div className="flex items-center gap-3">
+        {/* Logo - Hidden on mobile, shown on desktop */}
+        <div className="hidden md:flex items-center gap-3">
           <img src={logoImg} alt="VIBEONE" className="w-10 h-10 md:w-12 md:h-12" />
           <div className="flex flex-col">
             <span

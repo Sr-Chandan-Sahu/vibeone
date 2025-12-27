@@ -222,6 +222,9 @@ export default function RoomPage() {
           if (event.data === window.YT.PlayerState.ENDED) {
             playNextTrack();
           }
+        },
+        onError: (event: any) => {
+          console.error('[Audio Player] Error:', event.data);
         }
       }
     });
@@ -231,21 +234,13 @@ export default function RoomPage() {
   useEffect(() => {
     if (!isPlayerReady || !playerRef.current) return;
 
-    // Determine which track to play based on active tab or if one is playing
-    // Prioritize the tab we are looking at? Or just follow state?
-    // If we are in Audio tab, sync with Audio State.
-    // If we are in Video tab, we shouldn't really use this effect for the iframe unless it's for something else.
-    // Actually, we need to handle the persistent audio player which plays ONLY audio.
-
     const audioState = musicState.audio;
 
     if (audioState.currentTrack) {
       // Logic for background audio player
       // We need to check if the iframe has the right video loaded
       const player = playerRef.current;
-      // Safety check for getPlayerState
       const playerState = typeof player.getPlayerState === 'function' ? player.getPlayerState() : -1;
-
       const currentVideoId = typeof player.getVideoData === 'function' ? player.getVideoData()?.video_id : null;
 
       if (currentVideoId !== audioState.currentTrack.id) {
@@ -539,6 +534,12 @@ export default function RoomPage() {
 
   return (
     <div className="min-h-screen bg-[#000000] relative overflow-hidden">
+      {/* Hidden YouTube Audio Player - Must have real dimensions for YouTube API to work */}
+      <div
+        ref={playerContainerRef}
+        className="absolute w-0 h-0 overflow-hidden opacity-0 pointer-events-none"
+        style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}
+      />
       {/* Header */}
       <header className="relative z-20 flex items-center justify-between px-6 lg:px-10 py-4">
         {/* Logo - Hide on mobile if showing Room ID at top? Images show Logout & UserPlus on mobile top */}
