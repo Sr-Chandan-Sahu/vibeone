@@ -215,6 +215,7 @@ export default function RoomPage() {
       events: {
         onReady: () => {
           setIsPlayerReady(true);
+          playerRef.current.unMute();
           playerRef.current.setVolume(volume);
         },
         onStateChange: (event: any) => {
@@ -535,11 +536,9 @@ export default function RoomPage() {
   return (
     <div className="min-h-screen bg-[#000000] relative overflow-hidden">
       {/* Hidden YouTube Audio Player - Must have real dimensions for YouTube API to work */}
-      <div
-        ref={playerContainerRef}
-        className="absolute w-0 h-0 overflow-hidden opacity-0 pointer-events-none"
-        style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}
-      />
+      <div className="absolute overflow-hidden opacity-0 pointer-events-none" style={{ width: '1px', height: '1px', left: '-9999px', top: '-9999px' }}>
+        <div ref={playerContainerRef} />
+      </div>
       {/* Header */}
       <header className="relative z-20 flex items-center justify-between px-6 lg:px-10 py-4">
         {/* Logo - Hide on mobile if showing Room ID at top? Images show Logout & UserPlus on mobile top */}
